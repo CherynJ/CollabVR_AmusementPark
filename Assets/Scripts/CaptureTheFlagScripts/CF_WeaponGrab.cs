@@ -23,6 +23,8 @@ public class CF_WeaponGrab : XRGrabInteractable, IPunOwnershipCallbacks
     public Team belongsTo = Team.NONE;
     public string ownerName = "";
 
+    private string grabberTeam;
+
     public PhotonView view;
 
     protected override void Awake()
@@ -43,9 +45,10 @@ public class CF_WeaponGrab : XRGrabInteractable, IPunOwnershipCallbacks
         PhotonNetwork.AddCallbackTarget(this);
     }
 
-    public void SetOwnerName()
+    [PunRPC]
+    private void RPCSetOwner(string name)
     {
-        ownerName = firstInteractorSelecting.transform.root.GetComponent<CF_PlayerMovement>().playerName;
+        ownerName = name;
     }
 
     protected override void OnHoverEntered(HoverEnterEventArgs args)
@@ -53,7 +56,6 @@ public class CF_WeaponGrab : XRGrabInteractable, IPunOwnershipCallbacks
         if (PhotonNetwork.InRoom && !view.IsMine)
         {
             view.RequestOwnership();
-            Debug.Log("Gun Ownership Requested");
         }
         base.OnHoverEntered(args);
     }
@@ -62,16 +64,20 @@ public class CF_WeaponGrab : XRGrabInteractable, IPunOwnershipCallbacks
     {
         if (view.IsMine)
         {
-            belongsTo = args.interactorObject.transform.root.GetComponent<CF_PlayerMovement>().team;
-            SetOwnerName();
+            var grabber = firstInteractorSelecting.transform.root.GetComponent<CF_PlayerMovement>();
+            view.RPC("SetTeam", RpcTarget.All, grabber.team.ToString());
+            view.RPC("RPCSetOwner", RpcTarget.All, grabber.playerName);
+            
         }
+        view.RPC("EnableGravity", RpcTarget.AllBuffered, "false");
         base.OnSelectEntered(args);
     }
 
     protected override void OnSelectExited(SelectExitEventArgs args)
     {
-        belongsTo = Team.NONE;
-        ownerName = "";
+        view.RPC("SetTeam", RpcTarget.All, " ");
+        view.RPC("RPCSetOwner", RpcTarget.All, "");
+        view.RPC("EnableGravity", RpcTarget.AllBuffered, "true");
         base.OnSelectExited(args);
     }
 
@@ -83,7 +89,6 @@ public class CF_WeaponGrab : XRGrabInteractable, IPunOwnershipCallbacks
 
     public void OnOwnershipRequest(PhotonView targetView, Player requestingPlayer)
     {
-        Debug.Log("Gun Ownership Request Received");
 
         if (targetView.gameObject != this.gameObject)
         {
@@ -98,11 +103,44 @@ public class CF_WeaponGrab : XRGrabInteractable, IPunOwnershipCallbacks
 
     public void OnOwnershipTransfered(PhotonView targetView, Player previousOwner)
     {
-        Debug.Log("Gun Ownership Transfered");
+        
     }
 
     public void OnOwnershipTransferFailed(PhotonView targetView, Player senderOfFailedRequest)
     {
         Debug.Log("Gun Ownership Transfered Failed!");
+    }
+
+    [PunRPC]
+    private void SetTeam(string t)
+    {
+        if (t == "BLUE")
+        {
+            belongsTo = Team.BLUE;
+        }
+        else if (t == "RED")
+        {
+            belongsTo = Team.RED;
+        }
+        else
+        {
+            belongsTo = Team.NONE;
+        }
+    }
+
+    [PunRPC]
+    private void EnableGravity(string state)
+    {
+        var rigidbody = gameObject.GetComponent<Rigidbody>();
+        if (state == "true")
+        {
+            rigidbody.useGravity = true;
+            rigidbody.isKinematic = false;
+        }
+        else
+        {
+            rigidbody.useGravity = false;
+            rigidbody.isKinematic = true;
+        }
     }
 }

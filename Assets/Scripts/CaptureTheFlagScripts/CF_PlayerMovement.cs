@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using Photon.Pun;
 using UnityEngine.XR.Interaction.Toolkit;
+using Photon.Realtime;
 
 public class CF_PlayerMovement : MonoBehaviourPunCallbacks
 {
@@ -26,9 +27,13 @@ public class CF_PlayerMovement : MonoBehaviourPunCallbacks
     public Team team;
     public Color blueTeamColor = Color.blue;
     public Color redTeamColor = Color.red;
+    public GameObject networkPlayerInstance;
 
     //Player Name
     public string playerName = "";
+
+    //Reference to ray interactor
+    private XRRayInteractor[] interactors;
 
     private void Awake()
     {
@@ -37,6 +42,12 @@ public class CF_PlayerMovement : MonoBehaviourPunCallbacks
         CF_TeamManager.OnSetTeam += OnOnSetTeam;
     }
 
+    private void OnDestroy()
+    {
+        CF_GameManager.OnGameStateChanged -= GameStateChanged;
+        CF_Player.OnRespawn -= OnOnRespawn;
+        CF_TeamManager.OnSetTeam -= OnOnSetTeam;
+    }
     // Start is called before the first frame update
     void Start()
     {
@@ -49,6 +60,7 @@ public class CF_PlayerMovement : MonoBehaviourPunCallbacks
         jumpActionRef.action.performed += OnJump;
 
         ChangeColor(Color.gray);
+        interactors = FindObjectsOfType<XRRayInteractor>();
     }
 
     private void OnJump(InputAction.CallbackContext obj)
@@ -71,9 +83,13 @@ public class CF_PlayerMovement : MonoBehaviourPunCallbacks
             center.z);
     }
 
-    private void OnOnRespawn()
+    private void OnOnRespawn(string ownerNumber)
     {
-        StartCoroutine(Respawn(3));
+        if (ownerNumber == networkPlayerInstance.GetPhotonView().Owner.ActorNumber.ToString())
+        {
+            Debug.Log("Respawning Player: " + ownerNumber);
+            StartCoroutine(Respawn(3));
+        }
     }
 
     IEnumerator Respawn(int seconds)
@@ -81,9 +97,25 @@ public class CF_PlayerMovement : MonoBehaviourPunCallbacks
         Debug.Log("Respawning...");
 
         // Disabling Collision and Movement
-        _xrOrigin.GetComponentInChildren<CapsuleCollider>().enabled = false;
+        
         movement.enabled = false;
+        
 
+        // Force Drop
+        foreach (var interactor in interactors)
+        {
+            interactor.allowSelect = false;
+            interactor.allowActivate = false;
+        }
+
+        yield return new WaitForSeconds(seconds / 2);
+        _xrOrigin.GetComponentInChildren<CapsuleCollider>().enabled = false;
+
+        foreach (var interactor in interactors)
+        {
+            interactor.allowSelect = true;
+            interactor.allowActivate = true;
+        }
         // Disabling Controllers
         foreach (var controller in GetComponentsInChildren<ActionBasedController>())
         {
@@ -101,14 +133,16 @@ public class CF_PlayerMovement : MonoBehaviourPunCallbacks
 
         // Enabling Collision and Movement
         _xrOrigin.GetComponentInChildren<CapsuleCollider>().enabled = true;
-        yield return new WaitForSeconds(seconds);
+        yield return new WaitForSeconds(seconds/2);
         movement.enabled = true;
 
         // Enabling Controllers
         foreach (var controller in GetComponentsInChildren<ActionBasedController>())
         {
-            controller.enabled = true;
+            controller.enableInputActions = true;
         }
+
+        
 
         Debug.Log("Player Respawned");
     }
@@ -124,22 +158,20 @@ public class CF_PlayerMovement : MonoBehaviourPunCallbacks
         else movement.enabled = true;
     }
 
-    private void OnOnSetTeam()
+    private void OnOnSetTeam(Team t)
     {
-        var teamProp = PhotonNetwork.LocalPlayer.CustomProperties["Team"];
-        if (teamProp.ToString() == "BLUE")
+        Debug.Log("Set local player team Team: " + t);
+        team = t;
+        if (t == Team.BLUE)
         {
-            team = Team.BLUE;
             ChangeColor(blueTeamColor);
         }
-        else if (teamProp.ToString() == "RED")
+        else if (t == Team.RED)
         {
-            team = Team.RED;
             ChangeColor(redTeamColor);
         }
         else
         {
-            team = Team.NONE;
             ChangeColor(Color.gray);
         }
     }
@@ -148,7 +180,10 @@ public class CF_PlayerMovement : MonoBehaviourPunCallbacks
     {
         foreach (var item in GetComponentsInChildren<Renderer>())
         {
-            item.material.color = color;
+            if (item.tag != "HealthBand")
+            {
+                item.material.color = color;
+            }
         }
     }
 
@@ -160,6 +195,7 @@ public class CF_PlayerMovement : MonoBehaviourPunCallbacks
             if (player.transform.GetComponent<PhotonView>().IsMine)
             {
                 playerName = player.playerName;
+                networkPlayerInstance = player.gameObject;
             }
         }
     }

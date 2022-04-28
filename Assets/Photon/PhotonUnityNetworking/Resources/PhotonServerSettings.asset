@@ -55,6 +55,13 @@ MonoBehaviour:
   - SetScoreText
   - RPCTakeDamage
   - OnTakeDamage
+  - ChangeTeam
+  - RPCSetOwner
+  - DisableSocket
+  - SetTeam
+  - SetTeam1
+  - InvokeGrabEvent
+  - EnableGravity
   DisableAutoOpenWizard: 1
   ShowSettings: 0
   DevRegionSetOnce: 1

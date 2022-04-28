@@ -8,7 +8,6 @@ using ExitGames.Client;
 
 public class CF_PlayerAppearance : MonoBehaviourPunCallbacks
 {
-    private Team team = Team.NONE;
 
     [Header("Color Changing Stuff")]
     public Color blueTeamColor = Color.blue;
@@ -20,7 +19,7 @@ public class CF_PlayerAppearance : MonoBehaviourPunCallbacks
 
     private void Awake()
     {
-        playerName = "Player " + photonView.ViewID;
+        playerName = "Player " + photonView.Owner.ActorNumber;
         photonView.RPC("ChangeName", RpcTarget.All, playerName);
     }
 
@@ -30,62 +29,23 @@ public class CF_PlayerAppearance : MonoBehaviourPunCallbacks
         base.OnPlayerEnteredRoom(newPlayer);
     }
 
-    public override void OnPlayerPropertiesUpdate(Player targetPlayer, ExitGames.Client.Photon.Hashtable changedProps)
+    
+
+    public void ChangeColorForTeam(string teamProp)
     {
-        base.OnPlayerPropertiesUpdate(targetPlayer, changedProps);
-        if (changedProps.ContainsKey("Team") && base.photonView.Owner == targetPlayer)
-        {
-            ChangeColorForTeam(changedProps["Team"].ToString());
-        }
-    }
-
-    private void ChangeColorForTeam(string teamProp)
-    {
-        if (teamProp == "BLUE")
-        {
-            team = Team.BLUE;
-            photonView.RPC("ChangeColor", RpcTarget.All);
-        }
-        else if (teamProp == "RED")
-        {
-            team = Team.RED;
-            photonView.RPC("ChangeColor", RpcTarget.All);
-        }
-        else
-        {
-            team = Team.NONE;
-            photonView.RPC("ChangeColor", RpcTarget.All);
-        }
-    }
-
-    public void TakeDamage() {
-        photonView.RPC("OnTakeDamage", RpcTarget.All);
-    }
-
-    IEnumerator TakeDmgCoroutine() {
-        foreach (var item in GetComponentsInChildren<Renderer>())
-        {
-            item.material.color = Color.red;
-        }
-
-        yield return new WaitForSeconds(0.1f);
-        ChangeColor();
+        photonView.RPC("ChangeColor", RpcTarget.All, teamProp);
     }
 
     [PunRPC]
-    private void OnTakeDamage() {
-        StartCoroutine(TakeDmgCoroutine());
-    }
-
-    [PunRPC]
-    private void ChangeColor()
+    private void ChangeColor(string team)
     {
         var color = Color.gray;
-        if (team == Team.BLUE)
+        
+        if (team == "BLUE")
         {
             color = blueTeamColor;
         }
-        else if (team == Team.RED)
+        else if (team == "RED")
         {
             color = redTeamColor;
         }
@@ -101,4 +61,6 @@ public class CF_PlayerAppearance : MonoBehaviourPunCallbacks
     {
         nameText.text = name;
     }
+
+    
 }

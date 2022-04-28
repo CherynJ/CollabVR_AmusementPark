@@ -5366,17 +5366,17 @@ MonoBehaviour:
       m_Calls: []
   m_AttachTransform: {fileID: 6462681695115553570}
   m_AttachEaseInTime: 0.15
-  m_MovementType: 1
+  m_MovementType: 2
   m_VelocityDamping: 1
   m_VelocityScale: 1
   m_AngularVelocityDamping: 1
   m_AngularVelocityScale: 1
   m_TrackPosition: 1
-  m_SmoothPosition: 0
+  m_SmoothPosition: 1
   m_SmoothPositionAmount: 5
   m_TightenPosition: 0.5
   m_TrackRotation: 1
-  m_SmoothRotation: 0
+  m_SmoothRotation: 1
   m_SmoothRotationAmount: 5
   m_TightenRotation: 0.5
   m_ThrowOnDetach: 1
@@ -5403,6 +5403,7 @@ MonoBehaviour:
   m_AttachPointCompatibilityMode: 0
   belongsTo: 2
   ownerName: 
+  view: {fileID: 0}
 --- !u!82 &6031051426744458191
 AudioSource:
   m_ObjectHideFlags: 0
@@ -5532,7 +5533,6 @@ MonoBehaviour:
   ps: {fileID: 3003700734922627629}
   ammoText: {fileID: 2794634297927363597}
   reloadReference: {fileID: 1317211890220955869, guid: c348712bda248c246b8c49b3db54643f, type: 3}
-  fireReference: {fileID: 0}
   _gunData: {fileID: 11400000, guid: 0e88b58167d415a48a4e8aaac6444c09, type: 2}
 --- !u!1 &6462681694950182718
 GameObject:

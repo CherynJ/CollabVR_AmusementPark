@@ -6,11 +6,17 @@ using UnityEngine.XR.Interaction.Toolkit;
 using Photon.Pun;
 using Photon.Realtime;
 
-public class CF_TwoHandGrab : CF_WeaponGrab, IPunOwnershipCallbacks
+public class CF_TwoHandGrab : XRGrabInteractable, IPunOwnershipCallbacks
 {
     public XRSimpleInteractable secondHandGrabPoint;
     private IXRSelectInteractor secondInteractor;
     private Quaternion initialAttachRotation;
+   
+    public Team belongsTo = Team.NONE;
+    public string ownerName;
+
+    public PhotonView view;
+
     public enum TwoHandRotationType
     {
         None, First, Second
@@ -34,6 +40,7 @@ public class CF_TwoHandGrab : CF_WeaponGrab, IPunOwnershipCallbacks
         PhotonNetwork.AddCallbackTarget(this);
         secondHandGrabPoint.selectEntered.AddListener(OnSecondHandGrab);
         secondHandGrabPoint.selectExited.AddListener(OnSecondHandRelease);
+        secondHandGrabPoint.enabled = false;
     }
 
     public override void ProcessInteractable(XRInteractionUpdateOrder.UpdatePhase updatePhase)
@@ -65,7 +72,7 @@ public class CF_TwoHandGrab : CF_WeaponGrab, IPunOwnershipCallbacks
 
     private void OnSecondHandRelease(SelectExitEventArgs arg0)
     {
-        firstInteractorSelecting.GetAttachTransform(this).localRotation = initialAttachRotation;
+        if (firstInteractorSelecting != null) { firstInteractorSelecting.GetAttachTransform(this).localRotation = initialAttachRotation; }
         secondInteractor = null;
     }
 
@@ -80,9 +87,12 @@ public class CF_TwoHandGrab : CF_WeaponGrab, IPunOwnershipCallbacks
         initialAttachRotation = firstInteractorSelecting.GetAttachTransform(this).localRotation;
         if (view.IsMine)
         {
-            belongsTo = args.interactorObject.transform.root.GetComponent<CF_PlayerMovement>().team;
-            SetOwnerName();
+            secondHandGrabPoint.enabled = true;
+            var grabber = firstInteractorSelecting.transform.root.GetComponent<CF_PlayerMovement>();
+            view.RPC("SetTeam", RpcTarget.All, grabber.team.ToString());
+            view.RPC("RPCSetOwner", RpcTarget.All, grabber.playerName);
         }
+        view.RPC("EnableGravity", RpcTarget.AllBuffered, "false");
         base.OnSelectEntered(args);
     }
 
@@ -90,8 +100,10 @@ public class CF_TwoHandGrab : CF_WeaponGrab, IPunOwnershipCallbacks
     {
         base.OnSelectExited(args);
         secondInteractor = null;
-        belongsTo = Team.NONE;
-        ownerName = "";
+        secondHandGrabPoint.enabled = false;
+        view.RPC("SetTeam", RpcTarget.All, " ");
+        view.RPC("RPCSetOwner", RpcTarget.All, "");
+        view.RPC("EnableGravity", RpcTarget.AllBuffered, "true");
 
     }
 
@@ -106,8 +118,69 @@ public class CF_TwoHandGrab : CF_WeaponGrab, IPunOwnershipCallbacks
         if (PhotonNetwork.InRoom && !view.IsMine)
         {
             view.RequestOwnership();
-            Debug.Log("Gun Ownership Requested");
         }
         base.OnHoverEntered(args);
+    }
+
+    public void OnOwnershipRequest(PhotonView targetView, Player requestingPlayer)
+    {
+
+        if (targetView.gameObject != this.gameObject)
+        {
+            return;
+        }
+
+        if (!isSelected && targetView.Owner != requestingPlayer)
+        {
+            targetView.TransferOwnership(requestingPlayer);
+        }
+    }
+
+    public void OnOwnershipTransfered(PhotonView targetView, Player previousOwner)
+    {
+        
+    }
+
+    public void OnOwnershipTransferFailed(PhotonView targetView, Player senderOfFailedRequest)
+    {
+        Debug.Log("Rifle Ownership Transfered Failed!");
+    }
+
+    [PunRPC]
+    private void RPCSetOwner( string name)
+    {
+        ownerName = name;
+    }
+    [PunRPC]
+    private void SetTeam(string t)
+    {
+        if (t ==  "BLUE")
+        {
+            belongsTo = Team.BLUE;
+        }
+        else if (t == "RED")
+        {
+            belongsTo = Team.RED;
+        }
+        else
+        {
+            belongsTo = Team.NONE;
+        }
+    }
+
+    [PunRPC]
+    private void EnableGravity(string state)
+    {
+        var rigidbody = gameObject.GetComponent<Rigidbody>();
+        if (state == "true")
+        {
+            rigidbody.useGravity = true;
+            rigidbody.isKinematic = false;
+        }
+        else
+        {
+            rigidbody.useGravity = false;
+            rigidbody.isKinematic = true;
+        }
     }
 }

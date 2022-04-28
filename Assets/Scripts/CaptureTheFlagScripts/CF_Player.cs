@@ -6,7 +6,7 @@ using System;
 using TMPro;
 using Photon.Realtime;
 
-public class CF_Player : MonoBehaviourPunCallbacks, IPunObservable
+public class CF_Player : MonoBehaviourPunCallbacks
 {
     public Team team;
     public string playerName;
@@ -15,13 +15,13 @@ public class CF_Player : MonoBehaviourPunCallbacks, IPunObservable
     public int maxHealth = 100;
     public int health = 100;
 
-    public static event Action OnRespawn;
+    public static event Action<string> OnRespawn;
 
 
     private void Awake()
     {
         CF_GameManager.OnGameStateChanged += GameManagerOnOnGameStateChanged;
-        playerName = "Player " + photonView.ViewID;
+        playerName = "Player " + photonView.Owner.ActorNumber;
     }
 
 
@@ -36,7 +36,7 @@ public class CF_Player : MonoBehaviourPunCallbacks, IPunObservable
             {
                 // Trigger Respawn Event
                 health = maxHealth;
-                OnRespawn?.Invoke();
+                OnRespawn?.Invoke(photonView.Owner.ActorNumber.ToString());
             }
         }
     }
@@ -44,18 +44,16 @@ public class CF_Player : MonoBehaviourPunCallbacks, IPunObservable
 
     public void TakeDamage(int damage, string attacker, out bool killedPlayer)
     {
-        Debug.Log(damage + " damage taken from: " + attacker);
-        // photonView.RPC("RPCTakeDamage", RpcTarget.All, damage.ToString());
+        photonView.RPC("RPCTakeDamage", RpcTarget.All, damage);
         if (damage < health)
         {
-            health -= damage;
             killedPlayer = false;
         }
         else
         {
-            health = 0;
             killedPlayer = true;
         }
+
     }
     private void GameManagerOnOnGameStateChanged(GameState obj)
     {
@@ -63,27 +61,23 @@ public class CF_Player : MonoBehaviourPunCallbacks, IPunObservable
         {
             // Trigger Respawn Event
             health = maxHealth;
-            OnRespawn?.Invoke();
-        }
-    }
-
-    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
-    {
-        if (stream.IsWriting)
-        {
-            stream.SendNext(health);
-        }
-        else
-        {
-            health = (int)stream.ReceiveNext();
+            OnRespawn?.Invoke(photonView.Owner.ActorNumber.ToString());
         }
     }
 
     [PunRPC]
-    private void RPCTakeDamage(string damage)
+    private void RPCTakeDamage(int damage)
     {
-        health -= int.Parse(damage);
-        Debug.Log("Damage taken: " + damage);
-        GetComponent<CF_PlayerAppearance>().TakeDamage();
+        if (!photonView.IsMine)
+            return;
+
+        if (damage < health)
+        {
+            health -= damage;
+        }
+        else
+        {
+            health = 0;
+        }
     }
 }

@@ -12,6 +12,9 @@ public class CF_Gun : MonoBehaviourPun
 {
     [Header("Gun Parameters")]
     [SerializeField] private bool _friendlyFire = false;
+    [SerializeField] private bool _canHurt = true;
+    private string ownerName;
+    private Team ownerTeam;
 
 
     [Header("References")]
@@ -20,6 +23,8 @@ public class CF_Gun : MonoBehaviourPun
     public TextMeshProUGUI ammoText;
     public InputActionReference reloadReference;
     private CF_WeaponGrab _interactable;
+    private CF_TwoHandGrab _interactable2;
+    private bool isTwoHand;
 
     [Header("Gun Scriptable")]
     [SerializeField] private CF_GunScriptableObject _gunData;
@@ -60,12 +65,28 @@ public class CF_Gun : MonoBehaviourPun
 
         _currentAmmo = _ammoCount;
         ammoText.text = _currentAmmo.ToString();
-        reloadReference.action.performed += OnReload;
+        
 
         _audioSource = gameObject.GetComponent<AudioSource>();
-        _interactable = gameObject.GetComponent<CF_WeaponGrab>();
-        _interactable.activated.AddListener(OnActivate);
-        _interactable.deactivated.AddListener(StoppedFiring);
+
+        if (gameObject.TryGetComponent(out CF_WeaponGrab weaponGrab))
+        {
+            _interactable = weaponGrab;
+            _interactable.activated.AddListener(OnActivate);
+            _interactable.deactivated.AddListener(StoppedFiring);
+            _interactable.selectEntered.AddListener(BindReload);
+            _interactable.selectExited.AddListener(UnbindReload);
+            isTwoHand = false;
+        }
+        else
+        {
+            _interactable2 = gameObject.GetComponent<CF_TwoHandGrab>();
+            _interactable2.deactivated.AddListener(StoppedFiring);
+            _interactable2.activated.AddListener(OnActivate);
+            _interactable2.selectEntered.AddListener(BindReload);
+            _interactable2.selectExited.AddListener(UnbindReload);
+            isTwoHand = true;
+        }
     }
 
     private void Update()
@@ -79,6 +100,7 @@ public class CF_Gun : MonoBehaviourPun
                     _lastFired = Time.time;
                     ammoText.text = _currentAmmo.ToString();
                     photonView.RPC("Shoot", RpcTarget.All);
+                    ShootRaycast();
                 }
             }
         }
@@ -101,6 +123,7 @@ public class CF_Gun : MonoBehaviourPun
                 if (_allowShoot && _currentAmmo > 0 && !_isReloading)
                 {
                     photonView.RPC("Shoot", RpcTarget.All);
+                    ShootRaycast();
                 }
                 else if (_currentAmmo == 0)
                 {
@@ -140,29 +163,31 @@ public class CF_Gun : MonoBehaviourPun
     }
 
     [PunRPC]
-    private void Shoot()
+    private void Shoot() //this is for audio and effects only
     {
-        bool enemyKilled = false;
 
         if (_currentAmmo > 0) { _currentAmmo -= 1; }
         ammoText.text = _currentAmmo.ToString();
 
         ps.Play();
         _audioSource.PlayOneShot(_shootAudio);
+    }
+
+    private void ShootRaycast()
+    {
+        bool enemyKilled = false;
         Ray ray = new Ray(shootTransform.position, shootTransform.forward);
-        if (Physics.Raycast(ray, out RaycastHit hit, 100f))
+        if (_canHurt && Physics.Raycast(ray, out RaycastHit hit, 100f))
         {
             if (hit.transform.root.TryGetComponent(out CF_Player enemyPlayer))
             {
-                Debug.Log("Shot hit: " + enemyPlayer.playerName);
-
                 if (!_friendlyFire)
                 {
-                    if (enemyPlayer.team != _interactable.belongsTo) { enemyPlayer.TakeDamage(_gunDamage, _interactable.ownerName, out enemyKilled); }
+                    if (enemyPlayer.team != ownerTeam) { enemyPlayer.TakeDamage(_gunDamage, ownerName, out enemyKilled); }
                 }
                 else
                 {
-                    enemyPlayer.TakeDamage(_gunDamage, _interactable.ownerName, out enemyKilled);
+                    enemyPlayer.TakeDamage(_gunDamage, ownerName, out enemyKilled);
                 }
 
                 if (enemyKilled)
@@ -170,20 +195,49 @@ public class CF_Gun : MonoBehaviourPun
                     Debug.Log("You killed " + enemyPlayer.playerName);
                 }
             }
-            else
-            {
-                Debug.Log("Shot Missed");
-            }
         }
         if (!_isAutomatic) StartCoroutine(SingleFireDelay());
     }
 
     private void OnReload(InputAction.CallbackContext ctx)
     {
-        if (photonView.IsMine && _interactable.isSelected)
+        if (isTwoHand)
         {
-            photonView.RPC("Reload", RpcTarget.All);
+            if (_interactable2.isSelected && photonView.IsMine)
+            {
+                photonView.RPC("Reload", RpcTarget.All);
+            }
         }
+        else
+        {
+            if (_interactable.isSelected && photonView.IsMine)
+            {
+                photonView.RPC("Reload", RpcTarget.All);
+            }
+        }
+        
+    }
+
+    private void BindReload(SelectEnterEventArgs args)
+    {
+        reloadReference.action.performed += OnReload;
+        if (isTwoHand)
+        {
+            ownerName = _interactable2.ownerName;
+            ownerTeam = _interactable2.belongsTo;
+        }
+        else
+        {
+            ownerName = _interactable.ownerName;
+            ownerTeam = _interactable.belongsTo;
+        }
+    }
+
+    private void UnbindReload(SelectExitEventArgs args)
+    {
+        reloadReference.action.performed -= OnReload;
+        ownerName = "";
+        ownerTeam = Team.NONE;
     }
 
     [PunRPC]
